@@ -6,6 +6,7 @@ import { getLibrary, refreshLibrary } from './library'
 import { launchGame } from './launcher'
 import { PcscService } from './pcscService'
 import { createTray } from './tray'
+import { UpdaterService } from './updater'
 
 let pcscService: PcscService | null = null
 let mainWindow: BrowserWindow | null = null
@@ -19,6 +20,9 @@ let toastHideTimer: ReturnType<typeof setTimeout> | null = null
 // staying up a couple seconds longer than the content needs costs nothing,
 // while hiding too early would cut off the reveal/countdown/launch sequence.
 const TOAST_AUTO_HIDE_MS = 8000
+
+// How often to check GitHub for a new release once the app is packaged.
+const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000
 
 // nfc-pcsc's native binding sometimes throws PC/SC errors (e.g. cancelling an
 // in-flight SCardGetStatusChange when we tear down a stale context) as
@@ -149,10 +153,16 @@ app
     const svc = new PcscService(mainWindow, getCardEventWindow)
     pcscService = svc
 
-    tray = createTray(mainWindow, () => {
-      isQuitting = true
-      app.quit()
-    })
+    const updater = new UpdaterService(mainWindow)
+
+    tray = createTray(
+      mainWindow,
+      () => {
+        isQuitting = true
+        app.quit()
+      },
+      () => updater.checkForUpdates()
+    )
 
     ipcMain.handle(IPC.libraryList, () => getLibrary())
     ipcMain.handle(IPC.libraryRefresh, () => refreshLibrary())
@@ -165,11 +175,19 @@ app
     })
     ipcMain.handle(IPC.cardConfirmOverwrite, () => svc.confirmOverwrite())
     ipcMain.handle(IPC.readerGetStatus, () => svc.getStatus())
+    ipcMain.handle(IPC.updateGetStatus, () => updater.getStatus())
+    ipcMain.handle(IPC.updateCheck, () => updater.checkForUpdates())
+    ipcMain.handle(IPC.updateInstall, () => updater.installNow())
 
     app.on('activate', () => {
       mainWindow?.show()
       mainWindow?.focus()
     })
+
+    // Check shortly after launch (packaged builds only — see UpdaterService),
+    // then periodically for as long as the app keeps running in the tray.
+    setTimeout(() => updater.checkForUpdates(), 5000)
+    setInterval(() => updater.checkForUpdates(), UPDATE_CHECK_INTERVAL_MS)
   })
   .catch((err) => {
     console.error('[main] startup failed', err)

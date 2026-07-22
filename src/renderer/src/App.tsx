@@ -1,6 +1,7 @@
 import { useCardBridge } from './lib/useCardBridge'
 import { isToastMode } from './lib/mode'
 import { ScanOverlay } from './components/ScanOverlay'
+import { UpdateModal } from './components/UpdateModal'
 import { LibraryScreen } from './screens/LibraryScreen'
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
     <div className="h-screen w-screen">
       <LibraryScreen />
       <ScanOverlay />
+      <UpdateModal />
     </div>
   )
 }

@@ -39,3 +39,9 @@ export interface CardTapEvent {
 export type WriteOutcome =
   | { ok: true }
   | { ok: false; error: string }
+
+export type UpdateStatus =
+  | { state: 'idle' }
+  | { state: 'checking' }
+  | { state: 'downloading'; version: string }
+  | { state: 'ready'; version: string; releaseNotes: string }

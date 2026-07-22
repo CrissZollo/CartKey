@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC, type CardEventFromMain } from '../shared/ipc'
-import type { CardPayload, Game, ReaderStatus } from '../shared/types'
+import type { CardPayload, Game, ReaderStatus, UpdateStatus } from '../shared/types'
 
 const api = {
   library: {
@@ -25,6 +25,16 @@ const api = {
       const listener = (_event: unknown, status: ReaderStatus): void => cb(status)
       ipcRenderer.on(IPC.readerStatus, listener)
       return () => ipcRenderer.removeListener(IPC.readerStatus, listener)
+    }
+  },
+  update: {
+    getStatus: (): Promise<UpdateStatus> => ipcRenderer.invoke(IPC.updateGetStatus),
+    check: (): Promise<void> => ipcRenderer.invoke(IPC.updateCheck),
+    install: (): Promise<void> => ipcRenderer.invoke(IPC.updateInstall),
+    onStatus: (cb: (status: UpdateStatus) => void): (() => void) => {
+      const listener = (_event: unknown, status: UpdateStatus): void => cb(status)
+      ipcRenderer.on(IPC.updateStatus, listener)
+      return () => ipcRenderer.removeListener(IPC.updateStatus, listener)
     }
   }
 }

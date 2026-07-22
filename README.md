@@ -9,6 +9,7 @@ Program blank RFID cards with games from your Steam and GOG library, then tap a 
 - Tap that card on any computer running CartKey later, and it looks up the game locally (or falls back to what's stored on the card) and launches it.
 - Tapping a card that already has a *different* game shows a compare screen before overwriting — you have to confirm, or just remove the card to cancel. Tapping a card that already has the *same* game just tells you so; nothing gets rewritten.
 - Closing the main window doesn't quit CartKey — it keeps running from the tray so cards keep working. Tapping a card while the window is closed pops up a fullscreen reveal overlay for the launch, same as if the window were open. A tray menu option lets you launch CartKey automatically on login, so after the initial install you never have to open it again.
+- CartKey checks GitHub for new releases in the background (shortly after launch, then every few hours, or on demand via the tray's "Check for Updates"). When one's downloaded, a modal shows the new version and its changelog — pulled straight from that release's GitHub notes — with a "Restart & Update" button.
 
 **Why something has to run at all**: an NFC/RFID reader has no OS-level "run this action on tap" hook the way phones handle NFC tags — something has to actively watch the reader and react. CartKey's tray-resident background mode is the lightest that's actually possible; genuinely zero installed software isn't achievable with this hardware.
 
@@ -41,7 +42,7 @@ Other scripts:
 | `npm run dev` | Runs the app in development mode with hot reload. |
 | `npm run typecheck` | Type-checks the main, preload, and renderer processes. |
 | `npm run build` | Builds the app (no packaging). |
-| `npm run dist` | Builds and packages a distributable via electron-builder. **Not yet configured** — no app icon or `electron-builder` config exists yet, so this currently uses bare defaults. |
+| `npm run dist` | Builds and packages a distributable (Linux: AppImage + deb, Windows: NSIS installer) via electron-builder. Verified working end-to-end on Linux — see Releasing below for how packaged builds actually get published. |
 
 ## Troubleshooting (Linux)
 
@@ -70,13 +71,27 @@ If the reader shows as "No reader detected" in the app:
 
 CartKey's own PC/SC connection self-heals from reader unplug/replug and pcscd restarts once the above is set up correctly — no need to restart the app.
 
+## Releasing
+
+Pushing a version tag triggers `.github/workflows/release.yml`, which builds Windows and Linux packages and publishes them as a GitHub Release automatically — no manual `electron-builder --publish` or personal access token needed, it uses the repo's built-in Actions token.
+
+1. Bump `"version"` in `package.json` (e.g. `0.2.0`).
+2. Commit, then tag and push:
+   ```bash
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+3. The workflow creates a draft release with **auto-generated notes** (from commits since the last release), builds both platforms, uploads the installers plus the `latest.yml`/`latest-linux.yml` metadata electron-updater needs, then un-drafts the release. That release body is exactly what shows up as the changelog in CartKey's update-ready modal.
+
+The repo's Settings → Actions → General → Workflow permissions must allow "Read and write permissions" for this to be able to create releases (usually the default, but worth checking once).
+
 ## Project structure
 
 ```
 src/
   main/       Electron main process — PC/SC reader service, Steam/GOG Galaxy/Heroic
-              library scanners, game launching, tray + autostart, window management,
-              IPC handlers
+              library scanners, game launching, tray + autostart, auto-update
+              (electron-updater), window management, IPC handlers
   preload/    contextBridge API exposed to the renderer as window.api
   renderer/   React UI (library grid, card programming flow, scan/launch overlay).
               Loaded in two modes: the normal library window, and a fullscreen
@@ -92,4 +107,5 @@ src/
 - On Linux/Mac, GOG support is via Heroic Games Launcher's local library, not the native GOG Galaxy client (which doesn't run there).
 - Only tested against Mifare Classic 1K cards and an ACR122U reader.
 - "Launch on login" only does something useful once CartKey is a packaged, installed app — during `npm run dev` it would just point at the bare Electron binary.
-- No packaged/installable build yet — runs via `npm run dev`.
+- **Auto-update is wired up but not yet tested against a real published release** — `npm run dist` packaging itself was verified end-to-end on Linux (native module correctly unpacked from asar, app launches, tray/toast windows both work), but the actual electron-updater download/install flow needs GitHub Releases to exist first, which requires pushing a real version tag. Treat the first real release as the actual test of this.
+- Windows builds (both GOG Galaxy and the NSIS installer/updater) are entirely unverified — everything Windows-specific in this project has been written without access to a Windows machine.

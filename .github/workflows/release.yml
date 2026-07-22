@@ -1,0 +1,61 @@
+name: Release
+
+# Push a tag like "v0.2.0" (matching the version in package.json) to build
+# and publish a release for Windows and Linux, with auto-generated notes
+# from the commits since the last release. That release body is exactly
+# what shows up as the changelog in the app's update-ready screen.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create draft release with auto-generated notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --draft --generate-notes \
+            --title "CartKey ${{ github.ref_name }}"
+
+  build:
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Build and publish to the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --publish always
+
+  publish-release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Un-draft the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release edit "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --draft=false

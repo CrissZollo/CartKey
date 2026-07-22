@@ -2,7 +2,11 @@ import { BrowserWindow, Menu, Tray, nativeImage } from 'electron'
 import { join } from 'path'
 import { isAutostartEnabled, setAutostartEnabled } from './autostart'
 
-export function createTray(mainWindow: BrowserWindow, onQuit: () => void): Tray {
+export function createTray(
+  mainWindow: BrowserWindow,
+  onQuit: () => void,
+  onCheckForUpdates: () => void
+): Tray {
   const iconPath = join(__dirname, '../../resources/tray-icon.png')
   const tray = new Tray(nativeImage.createFromPath(iconPath))
   tray.setToolTip('CartKey')
@@ -22,6 +26,7 @@ export function createTray(mainWindow: BrowserWindow, onQuit: () => void): Tray 
         checked: isAutostartEnabled(),
         click: (item) => setAutostartEnabled(item.checked)
       },
+      { label: 'Check for Updates', click: onCheckForUpdates },
       { type: 'separator' },
       { label: 'Quit', click: onQuit }
     ])

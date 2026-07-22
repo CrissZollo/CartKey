@@ -9,7 +9,11 @@ export const IPC = {
   cardConfirmOverwrite: 'card:confirmOverwrite',
   cardEvent: 'card:event',
   readerStatus: 'reader:status',
-  readerGetStatus: 'reader:getStatus'
+  readerGetStatus: 'reader:getStatus',
+  updateStatus: 'update:status',
+  updateGetStatus: 'update:getStatus',
+  updateCheck: 'update:check',
+  updateInstall: 'update:install'
 } as const
 
 export type CardEventFromMain =
