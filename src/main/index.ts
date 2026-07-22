@@ -1,12 +1,24 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, screen, BrowserWindow, ipcMain, Tray } from 'electron'
 import { join } from 'path'
 import { IPC } from '../shared/ipc'
 import type { CardPayload, Game } from '../shared/types'
 import { getLibrary, refreshLibrary } from './library'
 import { launchGame } from './launcher'
 import { PcscService } from './pcscService'
+import { createTray } from './tray'
 
 let pcscService: PcscService | null = null
+let mainWindow: BrowserWindow | null = null
+let toastWindow: BrowserWindow | null = null
+let tray: Tray | null = null
+let isQuitting = false
+let toastHideTimer: ReturnType<typeof setTimeout> | null = null
+
+// How long the fullscreen toast window stays up after routing an event to
+// it. Generous on purpose — it's transparent and click-through-free, so
+// staying up a couple seconds longer than the content needs costs nothing,
+// while hiding too early would cut off the reveal/countdown/launch sequence.
+const TOAST_AUTO_HIDE_MS = 8000
 
 // nfc-pcsc's native binding sometimes throws PC/SC errors (e.g. cancelling an
 // in-flight SCardGetStatusChange when we tear down a stale context) as
@@ -16,8 +28,25 @@ process.on('uncaughtException', (err) => {
   console.error('[main] uncaught exception', err)
 })
 
-function createWindow(): BrowserWindow {
-  const mainWindow = new BrowserWindow({
+function rendererUrl(query?: string): { loadURL: string } | { loadFile: string; search?: string } {
+  if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
+    const base = process.env['ELECTRON_RENDERER_URL']
+    return { loadURL: query ? `${base}?${query}` : base }
+  }
+  return { loadFile: join(__dirname, '../renderer/index.html'), search: query }
+}
+
+function loadRenderer(win: BrowserWindow, query?: string): void {
+  const target = rendererUrl(query)
+  if ('loadURL' in target) {
+    win.loadURL(target.loadURL)
+  } else {
+    win.loadFile(target.loadFile, target.search ? { search: target.search } : undefined)
+  }
+}
+
+function createMainWindow(): BrowserWindow {
+  const win = new BrowserWindow({
     width: 1200,
     height: 800,
     show: false,
@@ -31,61 +60,132 @@ function createWindow(): BrowserWindow {
 
   // Safety net: if the page never paints (crashed GPU, network hiccup on the
   // dev server, etc.) don't leave the user with a permanently invisible app.
-  const forceShowTimer = setTimeout(() => mainWindow.show(), 8000)
+  const forceShowTimer = setTimeout(() => win.show(), 8000)
 
-  mainWindow.on('ready-to-show', () => {
+  win.on('ready-to-show', () => {
     clearTimeout(forceShowTimer)
-    mainWindow.show()
+    win.show()
   })
 
-  mainWindow.webContents.on('did-fail-load', (_e, errorCode, errorDescription, url) => {
+  // Closing the window just hides it — the app keeps running in the tray so
+  // cards keep working. Only the tray's "Quit" truly exits.
+  win.on('close', (e) => {
+    if (!isQuitting) {
+      e.preventDefault()
+      win.hide()
+    }
+  })
+
+  win.webContents.on('did-fail-load', (_e, errorCode, errorDescription, url) => {
     console.error('[main] did-fail-load', { errorCode, errorDescription, url })
   })
-  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+  win.webContents.on('render-process-gone', (_e, details) => {
     console.error('[main] render-process-gone', details)
   })
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
+  win.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
 
-  if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
-  }
-
-  return mainWindow
+  loadRenderer(win)
+  return win
 }
 
-app.whenReady().then(async () => {
-  await refreshLibrary().catch((err) => console.error('[main] refreshLibrary failed', err))
-
-  const mainWindow = createWindow()
-  const svc = new PcscService(mainWindow)
-  pcscService = svc
-
-  ipcMain.handle(IPC.libraryList, () => getLibrary())
-  ipcMain.handle(IPC.libraryRefresh, () => refreshLibrary())
-  ipcMain.handle(IPC.launch, (_event, game: Game) => launchGame(game))
-  ipcMain.handle(IPC.cardBeginProgram, (_event, payload: CardPayload) => {
-    svc.beginProgram(payload)
+/** A fullscreen, transparent, click-through-free overlay used to show the
+ * scan/launch reveal when the library window isn't open — so tapping an
+ * already-programmed card still works even if the user never opens the app
+ * after the first setup. */
+function createToastWindow(): BrowserWindow {
+  const { workAreaSize } = screen.getPrimaryDisplay()
+  const win = new BrowserWindow({
+    width: workAreaSize.width,
+    height: workAreaSize.height,
+    x: 0,
+    y: 0,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    movable: false,
+    hasShadow: false,
+    show: false,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.mjs'),
+      sandbox: false
+    }
   })
-  ipcMain.handle(IPC.cardCancelProgram, () => {
-    svc.cancelProgram()
-  })
-  ipcMain.handle(IPC.cardConfirmOverwrite, () => svc.confirmOverwrite())
-  ipcMain.handle(IPC.readerGetStatus, () => svc.getStatus())
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  loadRenderer(win, 'mode=toast')
+  return win
+}
+
+/** Decides who should react to a card event right now, and — if it's the
+ * toast window — brings it up front for a bit. Reader status always goes to
+ * mainWindow separately regardless of this. */
+function getCardEventWindow(): BrowserWindow {
+  if (mainWindow && mainWindow.isVisible() && !mainWindow.isMinimized()) {
+    return mainWindow
+  }
+
+  if (!toastWindow) toastWindow = createToastWindow()
+  toastWindow.showInactive()
+
+  if (toastHideTimer) clearTimeout(toastHideTimer)
+  toastHideTimer = setTimeout(() => toastWindow?.hide(), TOAST_AUTO_HIDE_MS)
+
+  return toastWindow
+}
+
+app
+  .whenReady()
+  .then(async () => {
+    await refreshLibrary().catch((err) => console.error('[main] refreshLibrary failed', err))
+
+    mainWindow = createMainWindow()
+    toastWindow = createToastWindow()
+
+    const svc = new PcscService(mainWindow, getCardEventWindow)
+    pcscService = svc
+
+    tray = createTray(mainWindow, () => {
+      isQuitting = true
+      app.quit()
+    })
+
+    ipcMain.handle(IPC.libraryList, () => getLibrary())
+    ipcMain.handle(IPC.libraryRefresh, () => refreshLibrary())
+    ipcMain.handle(IPC.launch, (_event, game: Game) => launchGame(game))
+    ipcMain.handle(IPC.cardBeginProgram, (_event, payload: CardPayload) => {
+      svc.beginProgram(payload)
+    })
+    ipcMain.handle(IPC.cardCancelProgram, () => {
+      svc.cancelProgram()
+    })
+    ipcMain.handle(IPC.cardConfirmOverwrite, () => svc.confirmOverwrite())
+    ipcMain.handle(IPC.readerGetStatus, () => svc.getStatus())
+
+    app.on('activate', () => {
+      mainWindow?.show()
+      mainWindow?.focus()
+    })
   })
-}).catch((err) => {
-  console.error('[main] startup failed', err)
+  .catch((err) => {
+    console.error('[main] startup failed', err)
+  })
+
+app.on('before-quit', () => {
+  isQuitting = true
 })
 
 app.on('window-all-closed', () => {
-  pcscService?.destroy()
-  if (process.platform !== 'darwin') app.quit()
+  // Windows are hidden, not destroyed, when the user "closes" them — this
+  // only fires on a real quit (tray Quit / before-quit), at which point we
+  // do want to actually exit.
+  if (isQuitting) {
+    pcscService?.destroy()
+    tray?.destroy()
+    if (process.platform !== 'darwin') app.quit()
+  }
 })

@@ -25,6 +25,12 @@ body {
   overflow: hidden;
 }
 
+/* The toast window is a transparent, frameless overlay over the desktop —
+   it must not paint the app's usual opaque background. */
+body.toast-mode {
+  background: transparent;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
 }

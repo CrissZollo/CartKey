@@ -27,7 +27,18 @@ export class PcscService {
   private currentStatus: ReaderStatus = { state: 'no-reader' }
   private supervisorTimer: ReturnType<typeof setInterval> | null = null
 
-  constructor(private window: BrowserWindow) {
+  /**
+   * `mainWindow` always gets reader status (harmless to send to a hidden
+   * window, and means the pill is already correct whenever it's reopened).
+   * `getCardEventWindow` decides who should react to an actual card event —
+   * the library window if it's open, otherwise a callback-provided fallback
+   * (e.g. a fullscreen toast window) so taps still do something useful while
+   * the app is just sitting quietly in the tray.
+   */
+  constructor(
+    private mainWindow: BrowserWindow,
+    private getCardEventWindow: () => BrowserWindow
+  ) {
     this.connect()
     this.supervisorTimer = setInterval(() => {
       if (this.currentStatus.state === 'no-reader') this.connect()
@@ -199,11 +210,11 @@ export class PcscService {
   }
 
   private sendCardEvent(event: CardEventFromMain): void {
-    this.window.webContents.send(IPC.cardEvent, event)
+    this.getCardEventWindow().webContents.send(IPC.cardEvent, event)
   }
 
   private sendReaderStatus(status: ReaderStatus): void {
     this.currentStatus = status
-    this.window.webContents.send(IPC.readerStatus, status)
+    this.mainWindow.webContents.send(IPC.readerStatus, status)
   }
 }

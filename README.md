@@ -1,13 +1,16 @@
 # CartKey
 
-Program blank RFID cards with games from your Steam and GOG (via Heroic) library, then tap a card on any computer running CartKey to launch that game. Programming and scanning both have a playful animated UI — a pixel "suck-in" effect when writing to a card, and a pop-in reveal with a launch countdown when scanning one back.
+Program blank RFID cards with games from your Steam and GOG library, then tap a card on any computer running CartKey to launch that game — even if the app isn't open, since it keeps a lightweight listener running in the background. Programming and scanning both have a playful animated UI — a pixel "suck-in" effect when writing to a card, and a pop-in reveal with a launch countdown when scanning one back.
 
 ## How it works
 
-- CartKey scans your local Steam and Heroic Games Launcher libraries and shows them as a grid of cover art.
+- CartKey scans your local Steam and GOG library and shows them as a grid of cover art. GOG detection goes through **GOG Galaxy** on Windows, or **Heroic Games Launcher** on Linux/Mac (GOG Galaxy itself doesn't run natively there).
 - Pick a game, tap a blank card on your reader, and CartKey writes a small record (platform + game ID + title + a fallback art URL) onto the card.
 - Tap that card on any computer running CartKey later, and it looks up the game locally (or falls back to what's stored on the card) and launches it.
 - Tapping a card that already has a *different* game shows a compare screen before overwriting — you have to confirm, or just remove the card to cancel. Tapping a card that already has the *same* game just tells you so; nothing gets rewritten.
+- Closing the main window doesn't quit CartKey — it keeps running from the tray so cards keep working. Tapping a card while the window is closed pops up a fullscreen reveal overlay for the launch, same as if the window were open. A tray menu option lets you launch CartKey automatically on login, so after the initial install you never have to open it again.
+
+**Why something has to run at all**: an NFC/RFID reader has no OS-level "run this action on tap" hook the way phones handle NFC tags — something has to actively watch the reader and react. CartKey's tray-resident background mode is the lightest that's actually possible; genuinely zero installed software isn't achievable with this hardware.
 
 ## Requirements
 
@@ -17,7 +20,9 @@ Program blank RFID cards with games from your Steam and GOG (via Heroic) library
 
 **Software**
 - Node.js 22+ and npm.
-- [Steam](https://store.steampowered.com/) and/or [Heroic Games Launcher](https://heroicgameslauncher.com/) installed, for library detection. GOG support goes through Heroic, not the native GOG Galaxy client.
+- [Steam](https://store.steampowered.com/) installed, for library detection.
+- Windows: [GOG Galaxy](https://www.gog.com/galaxy) installed, for GOG library detection/launching.
+- Linux/Mac: [Heroic Games Launcher](https://heroicgameslauncher.com/) installed instead, for GOG (and Epic) library detection/launching.
 - Linux: `pcscd` and `ccid` installed and running (see Troubleshooting below — this is the single most common thing that goes wrong).
 
 ## Getting started
@@ -69,16 +74,22 @@ CartKey's own PC/SC connection self-heals from reader unplug/replug and pcscd re
 
 ```
 src/
-  main/       Electron main process — PC/SC reader service, Steam/Heroic library
-              scanners, game launching, IPC handlers
+  main/       Electron main process — PC/SC reader service, Steam/GOG Galaxy/Heroic
+              library scanners, game launching, tray + autostart, window management,
+              IPC handlers
   preload/    contextBridge API exposed to the renderer as window.api
-  renderer/   React UI (library grid, card programming flow, scan/launch overlay)
+  renderer/   React UI (library grid, card programming flow, scan/launch overlay).
+              Loaded in two modes: the normal library window, and a fullscreen
+              transparent "toast" window (?mode=toast) used when the library
+              window is closed — see src/renderer/src/lib/mode.ts
   shared/     Types, IPC channel definitions, and the card data codec shared
               between main and renderer
 ```
 
 ## Known limitations
 
-- GOG support is via Heroic Games Launcher's local library, not the native GOG Galaxy client (which doesn't run on Linux).
+- **GOG Galaxy support on Windows is implemented but not yet hardware-tested** — it was built from documented registry keys (`HKLM\Software\GOG.com\Games`) and the community-verified `GalaxyClient.exe /command=runGame` launch invocation, but this project has so far only been developed and run on Linux. Treat it as needing a first real test pass on Windows.
+- On Linux/Mac, GOG support is via Heroic Games Launcher's local library, not the native GOG Galaxy client (which doesn't run there).
 - Only tested against Mifare Classic 1K cards and an ACR122U reader.
+- "Launch on login" only does something useful once CartKey is a packaged, installed app — during `npm run dev` it would just point at the bare Electron binary.
 - No packaged/installable build yet — runs via `npm run dev`.
