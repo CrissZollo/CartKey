@@ -39,6 +39,15 @@ jobs:
         with:
           node-version: 22
 
+      # node-gyp needs winscard.h to compile the native PC/SC binding
+      # (@pokusew/pcsclite) — not present on the runner by default.
+      # Windows has the equivalent headers built into its SDK already.
+      - name: Install PC/SC dev headers (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpcsclite-dev
+
       - run: npm ci
 
       - run: npm run build
