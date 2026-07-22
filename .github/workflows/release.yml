@@ -25,6 +25,22 @@ jobs:
             --draft --generate-notes \
             --title "CartKey ${{ github.ref_name }}"
 
+      # gh release assets always show every uploaded file, including the
+      # .yml/.blockmap auto-update metadata electron-updater needs — there's
+      # no way to hide those from a human browsing the release, so just tell
+      # people up front which file is actually the one to download.
+      - name: Add download guidance to release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NOTES=$(gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" --json body -q .body)
+          {
+            echo "**Download:** Windows — the \`.exe\`. Linux — \`.AppImage\` (portable), \`.deb\` (Debian/Ubuntu), or \`.pacman\` (Arch). Ignore the \`.yml\`/\`.blockmap\` files below, those are auto-update metadata, not for you."
+            echo ""
+            echo "$NOTES"
+          } > /tmp/release-notes.md
+          gh release edit "${{ github.ref_name }}" --repo "${{ github.repository }}" --notes-file /tmp/release-notes.md
+
   build:
     needs: create-release
     strategy:
