@@ -42,7 +42,7 @@ Other scripts:
 | `npm run dev` | Runs the app in development mode with hot reload. |
 | `npm run typecheck` | Type-checks the main, preload, and renderer processes. |
 | `npm run build` | Builds the app (no packaging). |
-| `npm run dist` | Builds and packages a distributable (Linux: AppImage + deb, Windows: NSIS installer) via electron-builder. Verified working end-to-end on Linux — see Releasing below for how packaged builds actually get published. |
+| `npm run dist` | Builds and packages a distributable (Linux: AppImage + deb + Arch/`.pacman`, Windows: NSIS installer) via electron-builder. Verified working end-to-end on Linux (package metadata for the Arch build checked with `pacman -Qip`) — see Releasing below for how packaged builds actually get published. |
 
 ## Troubleshooting (Linux)
 
@@ -84,6 +84,8 @@ Pushing a version tag triggers `.github/workflows/release.yml`, which builds Win
 3. The workflow creates a draft release with **auto-generated notes** (from commits since the last release), builds both platforms, uploads the installers plus the `latest.yml`/`latest-linux.yml` metadata electron-updater needs, then un-drafts the release. That release body is exactly what shows up as the changelog in CartKey's update-ready modal.
 
 The repo's Settings → Actions → General → Workflow permissions must allow "Read and write permissions" for this to be able to create releases (usually the default, but worth checking once).
+
+**Do not build the Windows target locally on Linux, even with wine installed.** `electron-builder --win` will happily produce a `CartKey.exe`, but the native PC/SC module (`@pokusew/pcsclite`) can't actually be cross-compiled that way — node-gyp has no real Windows cross-compilation toolchain here, so the "Windows" build silently ends up bundling the *Linux* `.node` binary (verifiable: `file` on the bundled `.node` shows `ELF`, not a Windows DLL). The app would launch on Windows but the card reader would never work. The CI workflow's `windows-latest` job is the only environment that produces a genuine Windows build, because it compiles the native module on real Windows.
 
 ## Project structure
 

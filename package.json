@@ -76,7 +76,8 @@
     "linux": {
       "target": [
         "AppImage",
-        "deb"
+        "deb",
+        "pacman"
       ],
       "category": "Game",
       "icon": "resources/icon.png",
