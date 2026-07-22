@@ -40,13 +40,15 @@ jobs:
           node-version: 22
 
       # node-gyp needs winscard.h to compile the native PC/SC binding
-      # (@pokusew/pcsclite) — not present on the runner by default.
-      # Windows has the equivalent headers built into its SDK already.
-      - name: Install PC/SC dev headers (Linux)
+      # (@pokusew/pcsclite), and electron-builder's pacman target shells out
+      # to bsdtar (from libarchive-tools) to build the mtree-format archive —
+      # neither is present on the runner by default. Windows already has the
+      # equivalent PC/SC headers built into its SDK, so no step needed there.
+      - name: Install Linux build dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libpcsclite-dev
+          sudo apt-get install -y libpcsclite-dev libarchive-tools
 
       - run: npm ci
 

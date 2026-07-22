@@ -1,6 +1,6 @@
 {
   "name": "cartkey",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Program RFID cards to launch your Steam and GOG games",
   "main": "./out/main/index.js",
   "author": {
