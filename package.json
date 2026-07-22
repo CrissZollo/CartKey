@@ -1,0 +1,45 @@
+{
+  "name": "cartkey",
+  "version": "0.1.0",
+  "description": "Program RFID cards to launch your Steam and GOG games",
+  "main": "./out/main/index.js",
+  "author": "you",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "dist": "electron-vite build && electron-builder",
+    "postinstall": "electron-rebuild -f -w @pokusew/pcsclite"
+  },
+  "dependencies": {
+    "framer-motion": "12.42.2",
+    "nfc-pcsc": "0.8.1",
+    "open": "11.0.0",
+    "zustand": "5.0.14"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "4.2.0",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "26.1.1",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "5.2.0",
+    "electron": "43.2.0",
+    "electron-builder": "26.15.3",
+    "electron-vite": "5.0.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.9.3",
+    "vite": "7.3.6"
+  },
+  "allowScripts": {
+    "@pokusew/pcsclite@0.6.0": true,
+    "electron-winstaller@5.4.0": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.1": true
+  }
+}

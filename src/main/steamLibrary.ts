@@ -1,0 +1,109 @@
+import { existsSync } from 'fs'
+import { readdir, readFile } from 'fs/promises'
+import { homedir } from 'os'
+import { join } from 'path'
+import type { Game } from '../shared/types'
+import { parseVdf, type VdfObject } from './vdf'
+
+const CANDIDATE_ROOTS = [
+  join(homedir(), '.local/share/Steam'),
+  join(homedir(), '.steam/steam'),
+  join(homedir(), '.steam/root'),
+  'C:\\Program Files (x86)\\Steam',
+  join(homedir(), 'Library/Application Support/Steam')
+]
+
+// Common non-game noise that shows up as regular appmanifests in every Steam library.
+const NAME_DENYLIST = /^(steamworks common redistributables|proton\b|steam linux runtime|steamvr)/i
+
+function findSteamRoots(): string[] {
+  return CANDIDATE_ROOTS.filter((p) => existsSync(join(p, 'steamapps')))
+}
+
+async function libraryPathsFrom(root: string): Promise<string[]> {
+  const vdfPath = join(root, 'steamapps', 'libraryfolders.vdf')
+  const paths = new Set<string>([root])
+  if (!existsSync(vdfPath)) return [...paths]
+
+  try {
+    const text = await readFile(vdfPath, 'utf8')
+    const parsed = parseVdf(text)
+    const folders = (parsed['libraryfolders'] as VdfObject) ?? parsed
+    for (const value of Object.values(folders)) {
+      if (typeof value === 'object' && typeof value['path'] === 'string') {
+        paths.add(value['path'])
+      }
+    }
+  } catch {
+    // fall back to just the root
+  }
+  return [...paths]
+}
+
+function artForApp(steamRoot: string, appid: string): Pick<Game, 'art' | 'artFallback'> {
+  const localCandidates = ['library_600x900.jpg', 'library_hero.jpg', 'header.jpg'].map((f) =>
+    join(steamRoot, 'appcache', 'librarycache', appid, f)
+  )
+  const local = localCandidates.find((p) => existsSync(p))
+  // header.jpg has existed for every app since the store's early days, so it's
+  // a near-universal last resort when the vertical capsule art isn't cached locally.
+  const cdnFallback = `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/header.jpg`
+  if (local) return { art: `file://${local}`, artFallback: cdnFallback }
+  return {
+    art: `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/library_600x900.jpg`,
+    artFallback: cdnFallback
+  }
+}
+
+export async function scanSteamLibrary(): Promise<Game[]> {
+  const roots = findSteamRoots()
+  const games: Game[] = []
+  const seenAppIds = new Set<string>()
+
+  for (const root of roots) {
+    const libraryPaths = await libraryPathsFrom(root)
+    for (const libPath of libraryPaths) {
+      const steamappsDir = join(libPath, 'steamapps')
+      if (!existsSync(steamappsDir)) continue
+
+      let entries: string[]
+      try {
+        entries = await readdir(steamappsDir)
+      } catch {
+        continue
+      }
+
+      for (const entry of entries) {
+        const match = entry.match(/^appmanifest_(\d+)\.acf$/)
+        if (!match) continue
+        const appid = match[1]
+        if (seenAppIds.has(appid)) continue
+
+        try {
+          const text = await readFile(join(steamappsDir, entry), 'utf8')
+          const parsed = parseVdf(text)
+          const state = (parsed['AppState'] as VdfObject) ?? parsed
+          const name = state['name']
+          if (typeof name !== 'string' || !name || NAME_DENYLIST.test(name)) continue
+
+          seenAppIds.add(appid)
+          games.push({
+            platform: 'steam',
+            id: appid,
+            title: name,
+            ...artForApp(root, appid),
+            installed: true
+          })
+        } catch {
+          continue
+        }
+      }
+    }
+  }
+
+  return games
+}
+
+export function steamLaunchUri(appid: string): string {
+  return `steam://rungameid/${appid}`
+}

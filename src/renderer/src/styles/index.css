@@ -1,0 +1,37 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-steam: #66c0f4;
+  --color-gog: #a06cd5;
+  --color-ink: #0b0d17;
+  --color-ink-soft: #141826;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: radial-gradient(ellipse at top, #1a1f33 0%, #0b0d17 60%);
+  color: #f4f5f8;
+  font-family:
+    'Inter',
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    sans-serif;
+  overflow: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a3050;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
