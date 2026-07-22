@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "description": "Program RFID cards to launch your Steam and GOG games",
   "main": "./out/main/index.js",
-  "author": "you",
+  "author": {
+    "name": "CrissZollo",
+    "email": "depth-broaden-oboe@duck.com"
+  },
   "private": true,
   "type": "module",
   "repository": {
@@ -76,7 +79,8 @@
         "deb"
       ],
       "category": "Game",
-      "icon": "resources/icon.png"
+      "icon": "resources/icon.png",
+      "synopsis": "Program RFID cards to launch your Steam and GOG games"
     },
     "win": {
       "target": [
