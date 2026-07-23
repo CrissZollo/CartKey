@@ -56,6 +56,8 @@ export function ScanOverlay() {
       }
     } else if (cardEvent.type === 'card-removed') {
       setReveal(null)
+    } else if (cardEvent.type === 'remote-toast') {
+      setToast(cardEvent.message)
     }
   }, [cardEvent, programModalOpen, eraseModalOpen])
 

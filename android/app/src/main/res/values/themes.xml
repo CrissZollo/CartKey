@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Actual theming happens in Compose (ui/theme) — this only needs to
+         cover the brief window before the first Compose frame draws. -->
+    <style name="Theme.CartKey" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/ink</item>
+        <item name="android:statusBarColor">@color/ink</item>
+    </style>
+</resources>

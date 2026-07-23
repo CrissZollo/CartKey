@@ -5,7 +5,9 @@ import { useAppStore } from '../lib/store'
 import { GameCard } from '../components/GameCard'
 import { ProgramModal } from '../components/ProgramModal'
 import { EraseModal } from '../components/EraseModal'
+import { PairPhoneModal } from '../components/PairPhoneModal'
 import { ReaderStatusPill } from '../components/ReaderStatusPill'
+import { SettingsModal } from '../components/SettingsModal'
 
 export function LibraryScreen() {
   const games = useAppStore((s) => s.games)
@@ -15,6 +17,8 @@ export function LibraryScreen() {
   const [selected, setSelected] = useState<Game | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [erasing, setErasing] = useState(false)
+  const [pairing, setPairing] = useState(false)
+  const [settings, setSettings] = useState(false)
 
   useEffect(() => {
     window.api.library.list().then((g) => {
@@ -41,6 +45,21 @@ export function LibraryScreen() {
         </div>
         <div className="flex items-center gap-3">
           <ReaderStatusPill />
+          <motion.button
+            onClick={() => setSettings(true)}
+            whileTap={{ scale: 0.94 }}
+            className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/70 hover:bg-white/10"
+            title="Settings"
+          >
+            Settings
+          </motion.button>
+          <motion.button
+            onClick={() => setPairing(true)}
+            whileTap={{ scale: 0.94 }}
+            className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/70 hover:bg-white/10"
+          >
+            Pair a phone
+          </motion.button>
           <motion.button
             onClick={() => setErasing(true)}
             whileTap={{ scale: 0.94 }}
@@ -82,6 +101,8 @@ export function LibraryScreen() {
 
       {selected && <ProgramModal game={selected} onClose={() => setSelected(null)} />}
       {erasing && <EraseModal onClose={() => setErasing(false)} />}
+      {pairing && <PairPhoneModal onClose={() => setPairing(false)} />}
+      {settings && <SettingsModal onClose={() => setSettings(false)} />}
     </div>
   )
 }

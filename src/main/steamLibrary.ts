@@ -4,6 +4,8 @@ import { homedir } from 'os'
 import { join } from 'path'
 import type { Game } from '../shared/types'
 import { parseVdf, type VdfObject } from './vdf'
+import { fetchSteamGridDbArt, getCachedArtPath } from './steamGridDb'
+import { getSteamGridDbApiKey } from './settingsStore'
 
 const CANDIDATE_ROOTS = [
   join(homedir(), '.local/share/Steam'),
@@ -40,15 +42,32 @@ async function libraryPathsFrom(root: string): Promise<string[]> {
   return [...paths]
 }
 
-function artForApp(steamRoot: string, appid: string): Pick<Game, 'art' | 'artFallback'> {
+/** Resolves art for a single Steam app. Cascades:
+ *  1. Local Steam librarycache → file:// path (best, always works if cached)
+ *  2. Locally cached SteamGridDB art → file:// path (downloaded previously)
+ *  3. SteamGridDB API (if API key is set) → download + cache → file:// path
+ *  4. Steam CDN URL guess → https:// URL (last resort)
+ *
+ *  `artFallback` is always the universal CDN header.jpg as a final safety net. */
+async function artForApp(steamRoot: string, appid: string): Promise<Pick<Game, 'art' | 'artFallback'>> {
   const localCandidates = ['library_600x900.jpg', 'library_hero.jpg', 'header.jpg'].map((f) =>
     join(steamRoot, 'appcache', 'librarycache', appid, f)
   )
   const local = localCandidates.find((p) => existsSync(p))
-  // header.jpg has existed for every app since the store's early days, so it's
-  // a near-universal last resort when the vertical capsule art isn't cached locally.
   const cdnFallback = `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/header.jpg`
   if (local) return { art: `file://${local}`, artFallback: cdnFallback }
+
+  // Check for previously cached SteamGridDB art.
+  const cachedSgdb = getCachedArtPath('steam', appid)
+  if (cachedSgdb) return { art: cachedSgdb, artFallback: cdnFallback }
+
+  // Try SteamGridDB live lookup if API key is configured.
+  const apiKey = getSteamGridDbApiKey()
+  if (apiKey) {
+    const sgdbArt = await fetchSteamGridDbArt(apiKey, appid)
+    if (sgdbArt) return { art: sgdbArt, artFallback: cdnFallback }
+  }
+
   return {
     art: `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/library_600x900.jpg`,
     artFallback: cdnFallback
@@ -91,7 +110,7 @@ export async function scanSteamLibrary(): Promise<Game[]> {
             platform: 'steam',
             id: appid,
             title: name,
-            ...artForApp(root, appid),
+            ...(await artForApp(root, appid)),
             installed: true
           })
         } catch {

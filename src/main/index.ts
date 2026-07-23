@@ -5,10 +5,13 @@ import type { CardPayload, Game } from '../shared/types'
 import { getLibrary, refreshLibrary } from './library'
 import { launchGame } from './launcher'
 import { PcscService } from './pcscService'
+import { RemoteService } from './remote/remoteServer'
 import { createTray } from './tray'
+import { getSettings, updateSettings } from './settingsStore'
 import { UpdaterService } from './updater'
 
 let pcscService: PcscService | null = null
+let remoteService: RemoteService | null = null
 let mainWindow: BrowserWindow | null = null
 let toastWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -145,13 +148,23 @@ function getCardEventWindow(): BrowserWindow {
 app
   .whenReady()
   .then(async () => {
-    await refreshLibrary().catch((err) => console.error('[main] refreshLibrary failed', err))
+    const initialLibrary = await refreshLibrary().catch((err) => {
+      console.error('[main] refreshLibrary failed', err)
+      return getLibrary()
+    })
 
     mainWindow = createMainWindow()
     toastWindow = createToastWindow()
 
     const svc = new PcscService(mainWindow, getCardEventWindow)
     pcscService = svc
+
+    const remote = await RemoteService.create(mainWindow, getCardEventWindow).catch((err) => {
+      console.error('[main] RemoteService failed to start', err)
+      return null
+    })
+    remoteService = remote
+    remote?.broadcastLibrary(initialLibrary)
 
     const updater = new UpdaterService(mainWindow)
 
@@ -165,7 +178,11 @@ app
     )
 
     ipcMain.handle(IPC.libraryList, () => getLibrary())
-    ipcMain.handle(IPC.libraryRefresh, () => refreshLibrary())
+    ipcMain.handle(IPC.libraryRefresh, async () => {
+      const games = await refreshLibrary()
+      remoteService?.broadcastLibrary(games)
+      return games
+    })
     ipcMain.handle(IPC.launch, (_event, game: Game) => launchGame(game))
     ipcMain.handle(IPC.cardBeginProgram, (_event, payload: CardPayload) => {
       svc.beginProgram(payload)
@@ -181,6 +198,14 @@ app
     ipcMain.handle(IPC.updateGetStatus, () => updater.getStatus())
     ipcMain.handle(IPC.updateCheck, () => updater.checkForUpdates())
     ipcMain.handle(IPC.updateInstall, () => updater.installNow())
+    ipcMain.handle(IPC.phoneStartPairing, () => remoteService?.startPairing())
+    ipcMain.handle(IPC.phoneCancelPairing, () => remoteService?.cancelPairing())
+    ipcMain.handle(IPC.phoneListDevices, () => remoteService?.listDevices() ?? [])
+    ipcMain.handle(IPC.phoneRevokeDevice, (_event, id: string) => remoteService?.revokeDevice(id))
+    ipcMain.handle(IPC.settingsGet, () => getSettings())
+    ipcMain.handle(IPC.settingsSet, (_event, patch: Record<string, unknown>) =>
+      updateSettings(patch as Record<string, string>)
+    )
 
     app.on('activate', () => {
       mainWindow?.show()
@@ -206,6 +231,7 @@ app.on('window-all-closed', () => {
   // do want to actually exit.
   if (isQuitting) {
     pcscService?.destroy()
+    remoteService?.destroy()
     tray?.destroy()
     if (process.platform !== 'darwin') app.quit()
   }

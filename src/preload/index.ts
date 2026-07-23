@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC, type CardEventFromMain } from '../shared/ipc'
-import type { CardPayload, Game, ReaderStatus, UpdateStatus } from '../shared/types'
+import type { CardPayload, Game, PairedDeviceStatus, PairingSession, ReaderStatus, UpdateStatus } from '../shared/types'
 
 const api = {
   library: {
@@ -37,6 +37,22 @@ const api = {
       ipcRenderer.on(IPC.updateStatus, listener)
       return () => ipcRenderer.removeListener(IPC.updateStatus, listener)
     }
+  },
+  phone: {
+    startPairing: (): Promise<PairingSession> => ipcRenderer.invoke(IPC.phoneStartPairing),
+    cancelPairing: (): Promise<void> => ipcRenderer.invoke(IPC.phoneCancelPairing),
+    listDevices: (): Promise<PairedDeviceStatus[]> => ipcRenderer.invoke(IPC.phoneListDevices),
+    revokeDevice: (id: string): Promise<void> => ipcRenderer.invoke(IPC.phoneRevokeDevice, id),
+    onDevicesChanged: (cb: (devices: PairedDeviceStatus[]) => void): (() => void) => {
+      const listener = (_event: unknown, devices: PairedDeviceStatus[]): void => cb(devices)
+      ipcRenderer.on(IPC.phoneDevicesChanged, listener)
+      return () => ipcRenderer.removeListener(IPC.phoneDevicesChanged, listener)
+    }
+  },
+  settings: {
+    get: (): Promise<Record<string, unknown>> => ipcRenderer.invoke(IPC.settingsGet),
+    set: (patch: Record<string, unknown>): Promise<Record<string, unknown>> =>
+      ipcRenderer.invoke(IPC.settingsSet, patch)
   }
 }
 

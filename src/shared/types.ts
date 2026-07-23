@@ -45,3 +45,19 @@ export type UpdateStatus =
   | { state: 'checking' }
   | { state: 'downloading'; version: string }
   | { state: 'ready'; version: string; releaseNotes: string }
+
+/** A currently-open pairing window, as shown to the renderer for QR/manual display. */
+export interface PairingSession {
+  uri: string
+  code: string
+  expiresAt: number
+}
+
+/** A previously-paired phone, as shown to the renderer (never carries the token/hash). */
+export interface PairedDeviceStatus {
+  id: string
+  name: string
+  pairedAt: number
+  lastSeenAt: number
+  connected: boolean
+}
