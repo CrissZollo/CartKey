@@ -4,6 +4,7 @@ import type { Game } from '@shared/types'
 import { useAppStore } from '../lib/store'
 import { GameCard } from '../components/GameCard'
 import { ProgramModal } from '../components/ProgramModal'
+import { EraseModal } from '../components/EraseModal'
 import { ReaderStatusPill } from '../components/ReaderStatusPill'
 
 export function LibraryScreen() {
@@ -13,6 +14,7 @@ export function LibraryScreen() {
   const setLoading = useAppStore((s) => s.setLoadingLibrary)
   const [selected, setSelected] = useState<Game | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [erasing, setErasing] = useState(false)
 
   useEffect(() => {
     window.api.library.list().then((g) => {
@@ -39,6 +41,13 @@ export function LibraryScreen() {
         </div>
         <div className="flex items-center gap-3">
           <ReaderStatusPill />
+          <motion.button
+            onClick={() => setErasing(true)}
+            whileTap={{ scale: 0.94 }}
+            className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/70 hover:bg-white/10"
+          >
+            Erase a card
+          </motion.button>
           <motion.button
             onClick={handleRefresh}
             whileTap={{ scale: 0.94 }}
@@ -72,6 +81,7 @@ export function LibraryScreen() {
       </div>
 
       {selected && <ProgramModal game={selected} onClose={() => setSelected(null)} />}
+      {erasing && <EraseModal onClose={() => setErasing(false)} />}
     </div>
   )
 }

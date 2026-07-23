@@ -8,6 +8,7 @@ Program blank RFID cards with games from your Steam and GOG library, then tap a 
 - Pick a game, tap a blank card on your reader, and CartKey writes a small record (platform + game ID + title + a fallback art URL) onto the card.
 - Tap that card on any computer running CartKey later, and it looks up the game locally (or falls back to what's stored on the card) and launches it.
 - Tapping a card that already has a *different* game shows a compare screen before overwriting — you have to confirm, or just remove the card to cancel. Tapping a card that already has the *same* game just tells you so; nothing gets rewritten.
+- "Erase a card" wipes a card back to blank — its cover art gets sucked upward and away into nothing (the mirror image of the load animation's pour-in), then the card is zeroed. Tapping an already-blank card in this mode just tells you so.
 - Closing the main window doesn't quit CartKey — it keeps running from the tray so cards keep working. Tapping a card while the window is closed pops up a fullscreen reveal overlay for the launch, same as if the window were open. A tray menu option lets you launch CartKey automatically on login, so after the initial install you never have to open it again.
 - CartKey checks GitHub for new releases in the background (shortly after launch, then every few hours, or on demand via the tray's "Check for Updates"). When one's downloaded, a modal shows the new version and its changelog — pulled straight from that release's GitHub notes — with a "Restart & Update" button.
 

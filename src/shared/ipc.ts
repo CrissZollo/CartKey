@@ -5,6 +5,7 @@ export const IPC = {
   libraryRefresh: 'library:refresh',
   launch: 'launch',
   cardBeginProgram: 'card:beginProgram',
+  cardBeginErase: 'card:beginErase',
   cardCancelProgram: 'card:cancelProgram',
   cardConfirmOverwrite: 'card:confirmOverwrite',
   cardEvent: 'card:event',
@@ -22,6 +23,9 @@ export type CardEventFromMain =
   | { type: 'confirm-overwrite'; existing: CardPayload; existingLocalMatch?: Game }
   | { type: 'write-start' }
   | { type: 'write-result'; outcome: WriteOutcome }
+  | { type: 'erase-empty' }
+  | { type: 'erase-start'; existing: CardPayload; existingLocalMatch?: Game }
+  | { type: 'erase-result'; outcome: WriteOutcome }
   | { type: 'card-removed' }
 
 export type { ReaderStatus }

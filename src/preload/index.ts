@@ -11,6 +11,7 @@ const api = {
   card: {
     beginProgram: (payload: CardPayload): Promise<void> =>
       ipcRenderer.invoke(IPC.cardBeginProgram, payload),
+    beginErase: (): Promise<void> => ipcRenderer.invoke(IPC.cardBeginErase),
     cancelProgram: (): Promise<void> => ipcRenderer.invoke(IPC.cardCancelProgram),
     confirmOverwrite: (): Promise<void> => ipcRenderer.invoke(IPC.cardConfirmOverwrite),
     onEvent: (cb: (event: CardEventFromMain) => void): (() => void) => {

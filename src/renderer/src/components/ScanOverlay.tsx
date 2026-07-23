@@ -19,6 +19,7 @@ const COUNTDOWN_START = 3
 export function ScanOverlay() {
   const cardEvent = useAppStore((s) => s.cardEvent)
   const programModalOpen = useAppStore((s) => s.programModalOpen)
+  const eraseModalOpen = useAppStore((s) => s.eraseModalOpen)
   const [reveal, setReveal] = useState<Reveal | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [count, setCount] = useState(COUNTDOWN_START)
@@ -33,7 +34,7 @@ export function ScanOverlay() {
   useEffect(() => setArtAttempt(0), [reveal])
 
   useEffect(() => {
-    if (!cardEvent || programModalOpen) return
+    if (!cardEvent || programModalOpen || eraseModalOpen) return
 
     if (cardEvent.type === 'tap') {
       const { result, localMatch } = cardEvent.tap
@@ -56,7 +57,7 @@ export function ScanOverlay() {
     } else if (cardEvent.type === 'card-removed') {
       setReveal(null)
     }
-  }, [cardEvent, programModalOpen])
+  }, [cardEvent, programModalOpen, eraseModalOpen])
 
   useEffect(() => {
     if (!toast) return

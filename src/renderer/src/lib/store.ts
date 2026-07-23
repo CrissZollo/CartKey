@@ -9,12 +9,14 @@ interface AppState {
   cardEvent: CardEventFromMain | null
   cardEventSeq: number
   programModalOpen: boolean
+  eraseModalOpen: boolean
 
   setGames: (games: Game[]) => void
   setLoadingLibrary: (loading: boolean) => void
   setReaderStatus: (status: ReaderStatus) => void
   pushCardEvent: (event: CardEventFromMain) => void
   setProgramModalOpen: (open: boolean) => void
+  setEraseModalOpen: (open: boolean) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -24,10 +26,12 @@ export const useAppStore = create<AppState>((set) => ({
   cardEvent: null,
   cardEventSeq: 0,
   programModalOpen: false,
+  eraseModalOpen: false,
 
   setGames: (games) => set({ games }),
   setLoadingLibrary: (loading) => set({ loadingLibrary: loading }),
   setReaderStatus: (status) => set({ readerStatus: status }),
   pushCardEvent: (event) => set((s) => ({ cardEvent: event, cardEventSeq: s.cardEventSeq + 1 })),
-  setProgramModalOpen: (open) => set({ programModalOpen: open })
+  setProgramModalOpen: (open) => set({ programModalOpen: open }),
+  setEraseModalOpen: (open) => set({ eraseModalOpen: open })
 }))

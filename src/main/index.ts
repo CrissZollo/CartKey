@@ -170,6 +170,9 @@ app
     ipcMain.handle(IPC.cardBeginProgram, (_event, payload: CardPayload) => {
       svc.beginProgram(payload)
     })
+    ipcMain.handle(IPC.cardBeginErase, () => {
+      svc.beginErase()
+    })
     ipcMain.handle(IPC.cardCancelProgram, () => {
       svc.cancelProgram()
     })

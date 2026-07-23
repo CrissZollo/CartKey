@@ -1,6 +1,6 @@
 import { NFC, KEY_TYPE_A, type Reader, type Card } from 'nfc-pcsc'
 import type { BrowserWindow } from 'electron'
-import { BLOCK_SIZE, decodeCardPayload, encodeCardPayload } from '../shared/cardCodec'
+import { BLOCK_SIZE, CARD_CAPACITY_BYTES, decodeCardPayload, encodeCardPayload } from '../shared/cardCodec'
 import type { CardPayload, ReaderStatus } from '../shared/types'
 import { IPC, type CardEventFromMain } from '../shared/ipc'
 import { findGame } from './library'
@@ -13,7 +13,7 @@ const DATA_BLOCKS_PER_SECTOR = 3
 // all self-heal without restarting the app.
 const RECONNECT_INTERVAL_MS = 5000
 
-type Mode = { kind: 'idle' } | { kind: 'awaiting-write'; payload: CardPayload }
+type Mode = { kind: 'idle' } | { kind: 'awaiting-write'; payload: CardPayload } | { kind: 'awaiting-erase' }
 
 interface PendingConfirmation {
   reader: Reader
@@ -53,6 +53,11 @@ export class PcscService {
     this.mode = { kind: 'awaiting-write', payload }
   }
 
+  beginErase(): void {
+    this.mode = { kind: 'awaiting-erase' }
+  }
+
+  /** Cancels whatever card operation is currently armed (program or erase). */
   cancelProgram(): void {
     this.mode = { kind: 'idle' }
     this.pendingConfirmation = null
@@ -110,6 +115,8 @@ export class PcscService {
       this.sendReaderStatus({ state: 'card-present', readerName, uid: card.uid })
       if (this.mode.kind === 'awaiting-write') {
         await this.handleProgramTap(reader, this.mode.payload)
+      } else if (this.mode.kind === 'awaiting-erase') {
+        await this.handleEraseTap(reader)
       } else {
         await this.handleTap(reader, card.uid)
       }
@@ -186,24 +193,55 @@ export class PcscService {
     await this.handleWrite(reader, newPayload)
   }
 
+  /** Writes a full CARD_CAPACITY_BYTES buffer across sectors 1-15, authenticating each sector first. */
+  private async writeAllBlocks(reader: Reader, buffer: Buffer): Promise<void> {
+    let offset = 0
+    for (let sector = 1; sector < SECTORS; sector++) {
+      const sectorFirstBlock = sector * 4
+      await reader.authenticate(sectorFirstBlock, KEY_TYPE_A, DEFAULT_KEY)
+      for (let b = 0; b < DATA_BLOCKS_PER_SECTOR; b++) {
+        const chunk = buffer.subarray(offset, offset + BLOCK_SIZE)
+        await reader.write(sectorFirstBlock + b, chunk, BLOCK_SIZE)
+        offset += BLOCK_SIZE
+      }
+    }
+  }
+
   private async handleWrite(reader: Reader, payload: CardPayload): Promise<void> {
     this.sendCardEvent({ type: 'write-start' })
     try {
-      const buffer = encodeCardPayload(payload)
-      let offset = 0
-      for (let sector = 1; sector < SECTORS; sector++) {
-        const sectorFirstBlock = sector * 4
-        await reader.authenticate(sectorFirstBlock, KEY_TYPE_A, DEFAULT_KEY)
-        for (let b = 0; b < DATA_BLOCKS_PER_SECTOR; b++) {
-          const chunk = buffer.subarray(offset, offset + BLOCK_SIZE)
-          await reader.write(sectorFirstBlock + b, chunk, BLOCK_SIZE)
-          offset += BLOCK_SIZE
-        }
-      }
+      await this.writeAllBlocks(reader, encodeCardPayload(payload))
       this.sendCardEvent({ type: 'write-result', outcome: { ok: true } })
     } catch (err) {
       this.sendCardEvent({
         type: 'write-result',
+        outcome: { ok: false, error: (err as Error).message }
+      })
+    }
+  }
+
+  /** Card tapped while armed to erase. A blank/already-empty card is reported
+   * as a no-op; otherwise the existing game is reported (so the UI can play
+   * the "sucked into the void" animation over its art) and then wiped. */
+  private async handleEraseTap(reader: Reader): Promise<void> {
+    this.mode = { kind: 'idle' }
+    const raw = await this.readAllBlocks(reader)
+    const existing = raw ? decodeCardPayload(raw) : null
+
+    if (!existing) {
+      this.sendCardEvent({ type: 'erase-empty' })
+      return
+    }
+
+    const existingLocalMatch = findGame(existing.platform, existing.id)
+    this.sendCardEvent({ type: 'erase-start', existing, existingLocalMatch })
+
+    try {
+      await this.writeAllBlocks(reader, Buffer.alloc(CARD_CAPACITY_BYTES))
+      this.sendCardEvent({ type: 'erase-result', outcome: { ok: true } })
+    } catch (err) {
+      this.sendCardEvent({
+        type: 'erase-result',
         outcome: { ok: false, error: (err as Error).message }
       })
     }
